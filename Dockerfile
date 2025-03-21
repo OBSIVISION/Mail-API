@@ -1,17 +1,16 @@
-# Use an official Dart runtime as a parent image
 FROM dart:stable AS build
 
-WORKDIR /app
-COPY pubspec.* ./
-COPY ./app/ ./
+
+COPY . .
 RUN dart pub get
-RUN dart compile exe bin/server.dart -o bin/server
+RUN dart compile exe ./lib/server.dart -o ./bin/server
 
-
-FROM scratch
+# Build minimal serving image from AOT-compiled `/server` and required system
+# libraries and configuration files stored in `/runtime/` from the build stage.
+FROM gcr.io/distroless/base
 COPY --from=build /runtime/ /
-COPY --from=build /app/bin/server /app/bin/
+COPY --from=build /root/bin/server ./server
 
-EXPOSE 8069
-ENV PORT 8080
-CMD ["/app/bin/server"]
+EXPOSE 8080
+
+CMD [ "./server" ]
