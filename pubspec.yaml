@@ -11,3 +11,5 @@ dev_dependencies:
   test: ^1.24.0
 dependencies:
   firedart: ^0.9.8
+  http_apis:
+    path: ../../../toolchain/dart_tools/boilerplates/http_apis/

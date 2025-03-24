@@ -1,8 +1,11 @@
 library obsivision.apis.mail;
 
+import 'package:http_apis/http_apis.dart';
 import 'package:firedart/firedart.dart';
-import 'dart:convert';
 import 'dart:io';
+
+part './endpoints/subscribe_post.dart';
+part './endpoints/subscribe_early_access.dart';
 
 final firestore = Firestore.instance;
 void main(List<String> args) async {
@@ -12,8 +15,6 @@ void main(List<String> args) async {
     int.fromEnvironment('PORT', defaultValue: 8080),
   );
   server.listen((req) async {
-    print(req.headers);
-    print(req.uri.queryParameters);
     req.response.headers
       ..contentType = ContentType.json
       ..set(
@@ -23,44 +24,53 @@ void main(List<String> args) async {
       ..set("Access-Control-Allow-Methods", "POST, GET, DELETE, PUT, OPTIONS")
       ..set("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-    final Map<String, Object?> payload = {};
     final String? userToken = req.headers.value('User-Token');
-
-    if (req.uri.pathSegments[0] == 'subscribe') {
-      final Map<String, Object?> body =
-          jsonDecode(await utf8.decodeStream(req));
-      print(body);
-      if (req.uri.pathSegments[1] == 'post') {
-        if (req.uri.queryParameters.containsKey('postId')) {
-          if (body.containsKey('emailAddress')) {
-            req.response.statusCode = HttpStatus.ok;
-          } else {
-            req.response.statusCode = HttpStatus.badRequest;
-          }
-        } else {
-          req.response.statusCode = HttpStatus.badRequest;
-        }
-      } else if (req.uri.pathSegments[1] == 'early-access') {
-        if (req.uri.queryParameters.containsKey('project') &&
-            req.uri.queryParameters.containsKey('accessType') &&
-            body.containsKey('emailAddress')) {
-          final ref = firestore
-              .collection('mail')
-              .document('subscriptions')
-              .collection('early-access')
-              .document(req.uri.queryParameters['project'] as String)
-              .collection(req.uri.queryParameters['accessType']!);
-          await ref.document(body['emailAddress'] as String).set({});
-          req.response.statusCode = HttpStatus.ok;
-        } else {
-          req.response.statusCode = HttpStatus.badRequest;
-        }
-      }
-    } else {
-      req.response.statusCode = HttpStatus.forbidden;
-    }
-
-    req.response.write(payload);
+    await api.handleRequest(req);
     await req.response.close();
   });
 }
+
+final API api = API(
+  apiName: 'mail_api',
+  routes: [
+    RouteSegment.routes(
+      routeName: 'subscribe',
+      routes: [
+        RouteSegment.endpoint(
+          routeName: 'post',
+          endpoint: Endpoint(endpointTypes: [
+            EndpointType.post
+          ], queryParameters: [
+            Param.required(SubscribePost.postId,
+                desc:
+                    'The Letterpress ID of the post to subscribe to notifications from.',
+                cast: (obj) => obj as String),
+          ], bodyParameters: [
+            Param.required(SubscribePost.emailAddress,
+                desc: 'The email address that notifications will be sent to.',
+                cast: (obj) => obj as String),
+          ], handleRequest: SubscribePost.handle),
+        ),
+        RouteSegment.endpoint(
+          routeName: 'early-access',
+          endpoint: Endpoint(endpointTypes: [
+            EndpointType.post
+          ], queryParameters: [
+            Param.required(SubscribeEarlyAccess.projectId,
+                desc: 'The project ID of the project to join the waitlist for.',
+                cast: (obj) => obj as String),
+            Param.required(SubscribeEarlyAccess.accessType,
+                desc:
+                    'The type of early-access being requested, and is specific to each project.',
+                cast: (obj) => obj as String),
+          ], bodyParameters: [
+            Param.required(SubscribeEarlyAccess.emailAddress,
+                desc:
+                    'The email address that access and communications will be sent to.',
+                cast: (obj) => obj as String),
+          ], handleRequest: SubscribeEarlyAccess.handle),
+        ),
+      ],
+    ),
+  ],
+);
